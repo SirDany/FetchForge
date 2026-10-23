@@ -1,0 +1,8 @@
+{
+  "Name": "Default",
+  "EnhancementEnabled": true,
+  "MaxParallelFfmpegJobs": 16,
+  "FfmpegFilter": "highpass=f=60,equalizer=f=150:t=q:w=1:g=3,equalizer=f=350:t=q:w=1:g=-1,equalizer=f=2800:t=q:w=1:g=2,treble=f=6500:g=1.5,loudnorm=I=-18:TP=-2:LRA=11",
+  "YtDlpArguments": "",
+  "FfmpegArguments": ""
+}

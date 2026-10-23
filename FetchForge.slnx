@@ -1,0 +1,6 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/FetchForge.Core/FetchForge.Core.csproj" />
+    <Project Path="src/FetchForge/FetchForge.csproj" />
+  </Folder>
+</Solution>
