@@ -2,6 +2,11 @@
 
 namespace FetchForge.Core.Services;
 
+public sealed record DependencyCheckReport(
+    IReadOnlyList<ToolCapabilityResult> Capabilities,
+    IReadOnlyList<ToolOptionCapabilityMatch> Matches,
+    string SummaryText);
+
 public sealed class DependencyChecker
 {
     private readonly ToolCapabilityDiscovery _discovery;
@@ -22,27 +27,43 @@ public sealed class DependencyChecker
             ?? throw new ArgumentNullException(nameof(registry));
     }
 
+    public Task<string> CheckAsync(
+        CancellationToken cancellationToken = default) =>
+        CheckAsync(paths: null, cancellationToken);
+
     public async Task<string> CheckAsync(
+        ToolPaths? paths,
         CancellationToken cancellationToken = default)
     {
-        var results = await _discovery.DiscoverAllAsync(cancellationToken);
+        var report = await DiscoverAndMatchAsync(paths, cancellationToken);
+        return report.SummaryText;
+    }
+
+    public async Task<DependencyCheckReport> DiscoverAndMatchAsync(
+        ToolPaths? paths = null,
+        CancellationToken cancellationToken = default)
+    {
+        var results = await _discovery.DiscoverAllAsync(paths, cancellationToken);
         var matcher = new ToolOptionCapabilityMatcher(_registry);
         var matches = matcher.Match(results);
 
         var lines = new List<string>();
-
         lines.AddRange(results.Select(FormatResult));
-        lines.Add("");
+        lines.Add(string.Empty);
         lines.Add("Configured option support:");
 
-        foreach (var match in matches.OrderBy(m => m.Definition.Tool)
-                                     .ThenBy(m => m.Definition.Id))
+        foreach (var match in matches
+                     .OrderBy(m => m.Definition.Tool)
+                     .ThenBy(m => m.Definition.Id))
         {
             lines.Add(
                 $"[{match.Status}] {match.Definition.Id}: {match.Message}");
         }
 
-        return string.Join(Environment.NewLine, lines);
+        return new DependencyCheckReport(
+            results,
+            matches,
+            string.Join(Environment.NewLine, lines));
     }
 
     private static string FormatResult(ToolCapabilityResult result)
@@ -54,8 +75,8 @@ public sealed class DependencyChecker
         var path = string.IsNullOrWhiteSpace(result.ExecutablePath)
             ? string.Empty
             : $" [{result.ExecutablePath}]";
-        var options = result.Found
-            ? $" Discovered {result.SupportedOptions.Count} option names."
+        var options = result.Found && result.HelpOptions.Count > 0
+            ? $" Discovered {result.HelpOptions.Count} help entries ({result.SupportedOptions.Count} switches)."
             : string.Empty;
 
         return $"{result.ToolName}: {status}{version}{path} — " +
