@@ -2,63 +2,71 @@
 
 **Download. Transform. Done.**
 
-FetchForge is an open-source Windows desktop application intended to bring `yt-dlp` downloading and FFmpeg post-processing together in one straightforward interface. It is designed to keep common actions simple while making advanced command-line options and reusable audio-processing profiles accessible.
+FetchForge is an open-source desktop application that brings `yt-dlp` downloading and FFmpeg audio post-processing together in one interface. It keeps common downloads simple while exposing curated, typed option editors, searchable full-tool `--help` options, live command previews, and portable JSON profiles.
 
-> **Project status:** Initial application shell. The current starter includes the WPF UI, profile import/export, local settings, and dependency checks. The download and FFmpeg job pipeline is not implemented yet.
+## Features
 
-## Planned features
-
-- Download audio from a single URL or playlist using `yt-dlp`.
-- Process downloaded files with FFmpeg, including optional EQ and loudness filters.
-- Simple default workflow, with advanced settings for the full `yt-dlp` and FFmpeg option sets.
-- Named sound/EQ profiles with JSON import and export.
-- Configurable FFmpeg concurrency (default: 16).
-- Per-file progress, cancellation, logs, and a final process report.
-- Temporary working directories cleaned up after a job finishes.
-- No account, cloud service, or project setup required.
+- **Simple download workflow:** Paste a single video or playlist URL, pick an output folder, select a profile, and start or cancel at any time (cancelling terminates active child process trees).
+- **Hybrid option exposure for both tools:**
+  - **Curated, typed option controls** (~30+ options across `yt-dlp` and `ffmpeg`) grouped by category with toggles, numeric bounds, dropdowns, descriptions, and per-option reset.
+  - **Runtime capability badges** (`Supported`, `Unsupported`, `Unverified`, `Built-in`) checked against your installed `yt-dlp`, `ffmpeg`, and `ffprobe` builds.
+  - **Searchable full option browser** parsed directly from `yt-dlp --help` and `ffmpeg -h full`, with one-click `+ Add` into extra arguments.
+  - **Extra arguments** passed as structured `argv` lists (never via shell interpolation).
+- **Double-encode protection:** When FFmpeg processing is enabled, `yt-dlp` fetches best audio without re-encoding (`-x` skipped) so FFmpeg performs one clean encode. Turning FFmpeg off switches `yt-dlp` back to direct extraction or raw media download.
+- **Live command preview & validation:** Inspect the exact `yt-dlp` and `ffmpeg` commands in real time, with conflict warnings when an extra argument overrides a curated option and errors if reserved job switches (`-o`, `-P`, `--print`, `-i`, `-progress`, etc.) are specified.
+- **Concurrent FFmpeg processing queue:** Configurable concurrency limit (default: 16), `ffprobe`-backed per-file percentage progress, EQ/loudness filter chains, and collision-safe output naming.
+- **Portable profiles & persistent settings:** Schema v2 profiles covering both tools (`%AppData%\FetchForge\profiles\*.json`), automatic migration of legacy v1 `AudioProfile` / `Default.json` files, and persistent app settings (`%AppData%\FetchForge\settings.json`).
+- **Per-file report & temp cleanup:** Detailed completion summary with copyable report and automatic cleanup of per-job temporary folders.
 
 ## Technology
 
-- C# and WPF on .NET 10 for a native Windows desktop UI.
-- `yt-dlp`, `ffmpeg`, and `ffprobe` are external command-line dependencies.
-- No third-party UI package is required by this starter.
-
-WPF is a mature XAML-based Windows UI framework with data binding, custom styling, and Visual Studio support. Microsoft currently recommends WinUI 3 for new native Windows apps; WPF is selected here to keep this project's initial implementation straightforward and easy to work on. See [Microsoft's Windows app framework guidance](https://learn.microsoft.com/en-us/windows/apps/whats-new/coming-to-windows).
+- C# and **Avalonia UI** (`.NET 10`) with **CommunityToolkit.Mvvm**.
+- `yt-dlp`, `ffmpeg`, and `ffprobe` invoked directly as external processes via `ProcessStartInfo.ArgumentList` (no shell execution).
 
 ## Requirements
 
-- Windows 10 or Windows 11.
-- .NET 10 SDK.
-- `yt-dlp`, `ffmpeg`, and `ffprobe` installed and available on `PATH`.
+- Windows 10 or Windows 11 (or .NET 10 supported desktop OS when running from source).
+- .NET 10 SDK (for building from source).
+- `yt-dlp`, `ffmpeg`, and `ffprobe` installed on `PATH` or configured in the **Settings & Tools** tab.
 
-The app will not bundle these tools in the initial design. Install each dependency from its official source and review its license and distribution terms if you later decide to bundle binaries.
+FetchForge does not bundle third-party media binaries. Install each tool from its official source.
 
-## Run from source
+## Run and test from source
 
 Open a terminal in the repository root:
 
 ```powershell
-dotnet --info
+dotnet test .\FetchForge.slnx
 dotnet run --project .\src\FetchForge\FetchForge.csproj
 ```
 
-Alternatively, open `src/FetchForge/FetchForge.csproj` in Visual Studio with the .NET desktop development workload installed.
+## Packaging
+
+To build a self-contained single-file Windows x64 executable under `artifacts\publish\`:
+
+```powershell
+.\publish.ps1
+```
 
 ## Local data
 
-The application stores user-specific settings and profiles under:
+User settings and portable profiles are stored under:
 
 ```text
 %AppData%\FetchForge\
+├── settings.json
+└── profiles\
+    └── *.json
 ```
 
-Profiles are JSON files and are intended to be portable between installations.
+Legacy v1 audio profile JSON files imported through the UI are automatically migrated to schema v2.
 
-## Advanced arguments
+## Advanced arguments and precedence
 
-The planned advanced settings will pass additional arguments to the corresponding executable. These are command-line arguments, not PowerShell scripts. Avoid pasting untrusted commands or shell operators into these fields.
+Extra arguments are appended after curated options as literal argument entries (one per line), never executed through PowerShell or `cmd.exe`.
 
-FetchForge should not silently override user-supplied options. Where an option conflicts with a built-in setting, the UI should explain which value takes precedence.
+- If an extra argument overlaps a curated option (including common aliases like `-f` or `-acodec`), the command preview raises a warning indicating which curated option is overridden.
+- Switches managed internally by FetchForge (`-o`, `--output`, `-P`, `--paths`, `--print`, `--progress-template`, `--newline`, `-i`, `-y`, `-n`, `-progress`) are reserved and blocked with a validation error if entered in extra arguments.
 
 ## Legal and responsible use
 
@@ -66,18 +74,18 @@ FetchForge is a tool for downloading and processing media. Users are responsible
 
 ## Third-party software
 
-FetchForge does not claim ownership of `yt-dlp` or FFmpeg. Their licenses and obligations are separate from the MIT license covering FetchForge's original code. See [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
+FetchForge does not claim ownership of `yt-dlp`, FFmpeg, Avalonia, or CommunityToolkit.Mvvm. See [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
 
 ## Roadmap
 
 - [x] Repository license and project documentation
-- [x] Initial WPF shell and profile import/export
-- [x] Dependency validation
-- [ ] Download pipeline with cancellation and progress
-- [ ] FFmpeg processing queue and concurrency limit
-- [ ] Full advanced-option editor and command preview
-- [ ] Per-file report and temporary-folder cleanup
-- [ ] Automated tests and release packaging
+- [x] Avalonia MVVM shell and portable v2 profile store with legacy migration
+- [x] Runtime tool capability discovery (`yt-dlp --help`, `ffmpeg -h full`, `ffmpeg -encoders`)
+- [x] Download pipeline with structured progress, playlist ordering, and process-tree cancellation
+- [x] FFmpeg processing queue with concurrency limit and `ffprobe` progress
+- [x] Hybrid option editor (curated controls + searchable `--help` list) and live command preview
+- [x] Per-file process report, collision-safe saves, and automatic temporary-folder cleanup
+- [x] Automated unit tests and self-contained Windows release packaging script
 
 ## License
 

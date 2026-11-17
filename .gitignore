@@ -12,3 +12,4 @@
 *.partial
 downloads/
 temp/
+artifacts/
