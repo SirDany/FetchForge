@@ -1,58 +1,558 @@
-<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" x:Class="FetchForge.MainWindow" Title="FetchForge" Width="1100" Height="780" MinWidth="850" MinHeight="650">
-    <Grid RowDefinitions="Auto,*" Margin="20" RowSpacing="16">
-        <StackPanel Spacing="4">
-            <TextBlock Text="FetchForge" FontSize="28" FontWeight="Bold"/>
-            <TextBlock Text="Media downloads and audio processing" Classes="muted"/>
-        </StackPanel>
-        <Grid Grid.Row="1" ColumnDefinitions="1.1*,0.9*" ColumnSpacing="16">
-            <ScrollViewer Grid.Column="0">
-                <StackPanel Spacing="16">
-                    <Border Classes="panel">
-                        <StackPanel Spacing="10">
-                            <TextBlock Text="Download" FontSize="18" FontWeight="SemiBold"/>
-                            <TextBlock Text="Video or playlist URL" Classes="muted"/>
-                            <TextBox x:Name="UrlBox" Watermark="Paste URL here"/>
-                            <TextBlock Text="Output directory" Classes="muted"/>
-                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
-                                <TextBox x:Name="OutputBox"/>
-                                <Button Grid.Column="1" Content="Browse" Click="BrowseOutput_Click"/>
-                            </Grid>
-                            <CheckBox x:Name="PlaylistOrderCheck" Content="Preserve playlist order in filenames" IsChecked="True"/>
-                            <Button Content="Check dependencies" Click="CheckTools_Click"/>
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:FetchForge.ViewModels"
+        xmlns:models="using:FetchForge.Core.Models"
+        x:Class="FetchForge.MainWindow"
+        x:DataType="vm:MainWindowViewModel"
+        Title="FetchForge"
+        Width="1340"
+        Height="860"
+        MinWidth="980"
+        MinHeight="680">
+    <Window.Resources>
+        <DataTemplate x:Key="OptionCardTemplate" x:DataType="vm:OptionItemViewModel">
+            <Border Classes="card" IsVisible="{Binding IsVisible}" Margin="0,0,0,8">
+                <StackPanel Spacing="6">
+                    <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+                        <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                            <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                            <TextBlock Text="{Binding CommandLineSwitch}"
+                                       Classes="muted"
+                                       FontFamily="Consolas, Cascadia Mono, monospace"
+                                       FontSize="12"
+                                       VerticalAlignment="Center"/>
                         </StackPanel>
-                    </Border>
-                    <Border Classes="panel">
-                        <StackPanel Spacing="10">
-                            <TextBlock Text="Audio processing" FontSize="18" FontWeight="SemiBold"/>
-                            <CheckBox x:Name="EnhanceCheck" Content="Enable FFmpeg processing" IsChecked="True"/>
-                            <TextBlock Text="FFmpeg audio filter chain" Classes="muted"/>
-                            <TextBox x:Name="FilterBox" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="100" VerticalContentAlignment="Top"/>
-                            <TextBlock Text="Maximum concurrent FFmpeg jobs" Classes="muted"/>
-                            <NumericUpDown x:Name="ConcurrencyBox" Minimum="1" Maximum="64" Value="16"/>
-                            <StackPanel Orientation="Horizontal" Spacing="8">
-                                <Button Content="Import profile" Click="ImportProfile_Click"/>
-                                <Button Content="Export profile" Click="ExportProfile_Click"/>
-                            </StackPanel>
-                        </StackPanel>
-                    </Border>
-                    <Border Classes="panel">
-                        <StackPanel Spacing="10">
-                            <TextBlock Text="Advanced arguments" FontSize="18" FontWeight="SemiBold"/>
-                            <TextBlock Text="yt-dlp — one argument per line" Classes="muted"/>
-                            <TextBox x:Name="YtDlpArgsBox" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="80" VerticalContentAlignment="Top"/>
-                            <TextBlock Text="FFmpeg — one argument per line" Classes="muted"/>
-                            <TextBox x:Name="FfmpegArgsBox" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="80" VerticalContentAlignment="Top"/>
-                        </StackPanel>
-                    </Border>
-                </StackPanel>
-            </ScrollViewer>
-            <Border Grid.Column="1" Classes="panel">
-                <StackPanel Spacing="10">
-                    <TextBlock Text="Activity and process report" FontSize="18" FontWeight="SemiBold"/>
-                    <TextBox x:Name="LogBox" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" VerticalContentAlignment="Top" MinHeight="400"/>
-                    <TextBlock Text="The download queue and FFmpeg processing pipeline are not implemented yet." Classes="muted" TextWrapping="Wrap"/>
+                        <Border Grid.Column="1"
+                                Classes="badge"
+                                Background="{Binding BadgeBackground}"
+                                ToolTip.Tip="{Binding SupportMessage}">
+                            <TextBlock Text="{Binding BadgeText}"
+                                       Foreground="{Binding BadgeForeground}"
+                                       FontSize="11"
+                                       FontWeight="SemiBold"/>
+                        </Border>
+                        <Button Grid.Column="2"
+                                Classes="subtle"
+                                Content="Reset"
+                                IsVisible="{Binding IsOverridden}"
+                                Command="{Binding ResetCommand}"/>
+                    </Grid>
+
+                    <TextBlock Text="{Binding Description}"
+                               Classes="muted"
+                               FontSize="12"
+                               TextWrapping="Wrap"/>
+
+                    <TextBlock Text="{Binding InapplicableReason}"
+                               Foreground="#FCD34D"
+                               FontSize="12"
+                               TextWrapping="Wrap"
+                               IsVisible="{Binding !IsApplicable}"/>
+
+                    <StackPanel IsEnabled="{Binding IsApplicable}">
+                        <CheckBox Content="Enabled"
+                                  IsVisible="{Binding IsBoolean}"
+                                  IsChecked="{Binding BoolValue}"/>
+
+                        <NumericUpDown IsVisible="{Binding IsNumeric}"
+                                       Minimum="{Binding NumericMinimum}"
+                                       Maximum="{Binding NumericMaximum}"
+                                       Increment="{Binding NumericIncrement}"
+                                       FormatString="{Binding NumericFormat}"
+                                       Value="{Binding NumericValue}"
+                                       HorizontalAlignment="Left"
+                                       MinWidth="170"/>
+
+                        <ComboBox IsVisible="{Binding IsEnumeration}"
+                                  ItemsSource="{Binding AllowedValues}"
+                                  SelectedItem="{Binding StringValue}"
+                                  HorizontalAlignment="Left"
+                                  MinWidth="220"/>
+
+                        <TextBox IsVisible="{Binding IsSingleLineText}"
+                                 Text="{Binding StringValue}"
+                                 PlaceholderText="{Binding Placeholder}"/>
+
+                        <TextBox IsVisible="{Binding IsMultilineText}"
+                                 Text="{Binding StringValue}"
+                                 PlaceholderText="{Binding Placeholder}"
+                                 AcceptsReturn="True"
+                                 TextWrapping="Wrap"
+                                 MinHeight="74"
+                                 VerticalContentAlignment="Top"/>
+                    </StackPanel>
                 </StackPanel>
             </Border>
+        </DataTemplate>
+
+        <DataTemplate x:Key="HelpOptionTemplate" x:DataType="vm:HelpOptionItemViewModel">
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10" Margin="0,4">
+                <StackPanel Spacing="2">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <TextBlock Text="{Binding SwitchSummary}"
+                                   FontFamily="Consolas, Cascadia Mono, monospace"
+                                   FontWeight="SemiBold"
+                                   FontSize="12"/>
+                        <TextBlock Text="{Binding Section}"
+                                   Classes="muted"
+                                   FontSize="11"
+                                   VerticalAlignment="Center"/>
+                    </StackPanel>
+                    <TextBlock Text="{Binding Description}"
+                               Classes="muted"
+                               FontSize="12"
+                               TextWrapping="Wrap"/>
+                </StackPanel>
+                <Button Grid.Column="1"
+                        Classes="subtle"
+                        Content="+ Add"
+                        VerticalAlignment="Top"
+                        Command="{Binding AddCommand}"/>
+            </Grid>
+        </DataTemplate>
+    </Window.Resources>
+
+    <Grid RowDefinitions="Auto,Auto,*" Margin="16" RowSpacing="12">
+        <!-- Header & Profile Bar -->
+        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="16">
+            <StackPanel Spacing="2" VerticalAlignment="Center">
+                <TextBlock Text="FetchForge" FontSize="24" FontWeight="Bold"/>
+                <TextBlock Text="Download with yt-dlp, process with FFmpeg" Classes="muted" FontSize="12"/>
+            </StackPanel>
+
+            <Border Grid.Column="1" Classes="panel" Padding="10,8" HorizontalAlignment="Right">
+                <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                    <TextBlock Text="Profile:" Classes="muted" VerticalAlignment="Center"/>
+                    <ComboBox ItemsSource="{Binding Profiles}"
+                              SelectedItem="{Binding SelectedProfile}"
+                              MinWidth="190">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate x:DataType="models:FetchForgeProfile">
+                                <TextBlock Text="{Binding Name}"/>
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
+                    <Button Classes="subtle" Content="New" Command="{Binding BeginNewProfileCommand}"/>
+                    <Button Classes="subtle" Content="Duplicate" Command="{Binding DuplicateProfileCommand}"/>
+                    <Button Classes="subtle" Content="Rename"
+                            IsEnabled="{Binding CanDeleteSelectedProfile}"
+                            Command="{Binding BeginRenameProfileCommand}"/>
+                    <Button Classes="subtle" Content="Delete"
+                            IsEnabled="{Binding CanDeleteSelectedProfile}"
+                            Command="{Binding DeleteProfileCommand}"/>
+                    <Button Classes="subtle" Content="Import" Command="{Binding ImportProfileCommand}"/>
+                    <Button Classes="subtle" Content="Export" Command="{Binding ExportProfileCommand}"/>
+                    <Button Classes="subtle" Content="Reset" Command="{Binding ResetProfileDefaultsCommand}"/>
+                </StackPanel>
+            </Border>
+        </Grid>
+
+        <!-- Inline Profile Name Editor -->
+        <Border Grid.Row="1"
+                Classes="panel"
+                Padding="10,8"
+                IsVisible="{Binding IsProfileNameEditorOpen}">
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <TextBlock Text="{Binding ProfileNameEditorPrompt}" VerticalAlignment="Center"/>
+                <TextBox Text="{Binding ProfileNameInput}" MinWidth="240" PlaceholderText="Profile name"/>
+                <Button Classes="accent" Content="Save" Command="{Binding CommitProfileNameCommand}"/>
+                <Button Content="Cancel" Command="{Binding CancelProfileNameCommand}"/>
+            </StackPanel>
+        </Border>
+
+        <!-- Main Workspace -->
+        <Grid Grid.Row="2" ColumnDefinitions="1.2*,0.9*" ColumnSpacing="14">
+            <!-- Left: Tabbed Controls -->
+            <TabControl Grid.Column="0">
+                <!-- Simple Download Tab -->
+                <TabItem Header="Download">
+                    <ScrollViewer Padding="0,8,4,0">
+                        <StackPanel Spacing="12">
+                            <Border Classes="panel">
+                                <StackPanel Spacing="10">
+                                    <TextBlock Text="Source &amp; Destination" FontSize="16" FontWeight="SemiBold"/>
+                                    <TextBlock Text="Video or playlist URL" Classes="muted" FontSize="12"/>
+                                    <TextBox Text="{Binding Url}"
+                                             PlaceholderText="Paste video or playlist URL here"/>
+
+                                    <TextBlock Text="Output directory" Classes="muted" FontSize="12"/>
+                                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                        <TextBox Text="{Binding OutputDirectory}"
+                                                 PlaceholderText="Select folder for saved files"/>
+                                        <Button Grid.Column="1" Content="Browse" Command="{Binding BrowseOutputCommand}"/>
+                                    </Grid>
+                                </StackPanel>
+                            </Border>
+
+                            <Border Classes="panel">
+                                <StackPanel Spacing="8">
+                                    <TextBlock Text="Workflow" FontSize="16" FontWeight="SemiBold"/>
+                                    <CheckBox Content="Enable FFmpeg audio processing"
+                                              IsChecked="{Binding FfmpegEnabled}"/>
+                                    <TextBlock Text="When enabled, yt-dlp downloads best audio without re-encoding so FFmpeg performs one clean encode. Turn off for raw downloads or yt-dlp-only extraction."
+                                               Classes="muted"
+                                               FontSize="12"
+                                               TextWrapping="Wrap"/>
+                                    <CheckBox Content="Preserve playlist order in filenames (001 - Title)"
+                                              IsChecked="{Binding PreservePlaylistOrder}"/>
+                                    <CheckBox Content="Overwrite existing files in output directory"
+                                              IsChecked="{Binding OverwriteExisting}"/>
+                                </StackPanel>
+                            </Border>
+
+                            <Border Classes="panel">
+                                <StackPanel Spacing="10">
+                                    <Grid ColumnDefinitions="Auto,Auto,*" ColumnSpacing="8">
+                                        <Button Classes="accent"
+                                                Content="Start Download"
+                                                Command="{Binding StartJobCommand}"/>
+                                        <Button Grid.Column="1"
+                                                Classes="danger"
+                                                Content="Cancel"
+                                                Command="{Binding CancelJobCommand}"/>
+                                        <TextBlock Grid.Column="2"
+                                                   Text="{Binding JobStatusMessage}"
+                                                   Classes="muted"
+                                                   VerticalAlignment="Center"
+                                                   TextTrimming="CharacterEllipsis"/>
+                                    </Grid>
+                                    <ProgressBar Minimum="0"
+                                                 Maximum="100"
+                                                 Value="{Binding OverallProgress}"
+                                                 Height="8"/>
+                                </StackPanel>
+                            </Border>
+
+                            <Border Classes="panel">
+                                <StackPanel Spacing="6">
+                                    <Grid ColumnDefinitions="*,Auto">
+                                        <TextBlock Text="Installed Tools" FontSize="15" FontWeight="SemiBold"/>
+                                        <Button Grid.Column="1"
+                                                Classes="subtle"
+                                                Content="Check dependencies"
+                                                IsEnabled="{Binding !IsDiscoveringTools}"
+                                                Command="{Binding CheckDependenciesCommand}"/>
+                                    </Grid>
+                                    <TextBlock Text="{Binding YtDlpStatusText}" Classes="muted" FontSize="12" TextWrapping="Wrap"/>
+                                    <TextBlock Text="{Binding FfmpegStatusText}" Classes="muted" FontSize="12" TextWrapping="Wrap"/>
+                                    <TextBlock Text="{Binding FfprobeStatusText}" Classes="muted" FontSize="12" TextWrapping="Wrap"/>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </ScrollViewer>
+                </TabItem>
+
+                <!-- yt-dlp Hybrid Options Tab -->
+                <TabItem Header="yt-dlp Options">
+                    <Grid RowDefinitions="Auto,*" RowSpacing="10" Margin="0,8,0,0">
+                        <Border Classes="panel" Padding="10">
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                                <TextBox Text="{Binding YtDlpOptionSearch}"
+                                         PlaceholderText="Filter curated yt-dlp options..."/>
+                                <CheckBox Grid.Column="1"
+                                          Content="Show advanced options"
+                                          IsChecked="{Binding ShowAdvancedOptions}"
+                                          VerticalAlignment="Center"/>
+                            </Grid>
+                        </Border>
+
+                        <ScrollViewer Grid.Row="1" Padding="0,0,6,0">
+                            <StackPanel Spacing="12">
+                                <ItemsControl ItemsSource="{Binding YtDlpOptionGroups}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="vm:OptionCategoryGroupViewModel">
+                                            <Border Classes="panel"
+                                                    IsVisible="{Binding HasVisibleOptions}"
+                                                    Margin="0,0,0,10">
+                                                <StackPanel Spacing="8">
+                                                    <TextBlock Text="{Binding Category}"
+                                                               FontSize="15"
+                                                               FontWeight="SemiBold"/>
+                                                    <ItemsControl ItemsSource="{Binding Options}"
+                                                                  ItemTemplate="{StaticResource OptionCardTemplate}"/>
+                                                </StackPanel>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+
+                                <Border Classes="panel">
+                                    <Expander Header="All yt-dlp options (from --help)" IsExpanded="False">
+                                        <StackPanel Spacing="8" Margin="0,8,0,0">
+                                            <TextBlock Text="{Binding YtDlpHelpSummary}" Classes="muted" FontSize="12"/>
+                                            <TextBox Text="{Binding YtDlpHelpSearch}"
+                                                     PlaceholderText="Search all yt-dlp flags and descriptions..."/>
+                                            <ListBox ItemsSource="{Binding FilteredYtDlpHelpOptions}"
+                                                     ItemTemplate="{StaticResource HelpOptionTemplate}"
+                                                     MaxHeight="280"/>
+                                        </StackPanel>
+                                    </Expander>
+                                </Border>
+
+                                <Border Classes="panel">
+                                    <StackPanel Spacing="6">
+                                        <TextBlock Text="Extra yt-dlp arguments (one argument per line)"
+                                                   FontWeight="SemiBold"/>
+                                        <TextBlock Text="Appended after curated options. Reserved job switches (-o, -P, --print, --progress-template) cannot be overridden."
+                                                   Classes="muted"
+                                                   FontSize="12"
+                                                   TextWrapping="Wrap"/>
+                                        <TextBox Classes="mono"
+                                                 Text="{Binding YtDlpExtraArgumentsText}"
+                                                 PlaceholderText="Example:&#10;--retries&#10;5"
+                                                 AcceptsReturn="True"
+                                                 TextWrapping="Wrap"
+                                                 MinHeight="90"
+                                                 VerticalContentAlignment="Top"/>
+                                    </StackPanel>
+                                </Border>
+                            </StackPanel>
+                        </ScrollViewer>
+                    </Grid>
+                </TabItem>
+
+                <!-- FFmpeg Hybrid Options Tab -->
+                <TabItem Header="FFmpeg Options">
+                    <Grid RowDefinitions="Auto,*" RowSpacing="10" Margin="0,8,0,0">
+                        <Border Classes="panel" Padding="10">
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="FFmpeg post-processing is currently disabled on the Download tab. Enable it to apply these settings."
+                                           Foreground="#FCD34D"
+                                           FontSize="12"
+                                           TextWrapping="Wrap"
+                                           IsVisible="{Binding !FfmpegEnabled}"/>
+                                <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="12">
+                                    <TextBox Text="{Binding FfmpegOptionSearch}"
+                                             PlaceholderText="Filter curated FFmpeg options..."/>
+                                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                        <TextBlock Text="Concurrency:" Classes="muted" VerticalAlignment="Center"/>
+                                        <NumericUpDown Minimum="1"
+                                                       Maximum="64"
+                                                       FormatString="0"
+                                                       Value="{Binding MaxConcurrentJobs}"
+                                                       Width="110"/>
+                                    </StackPanel>
+                                    <CheckBox Grid.Column="2"
+                                              Content="Advanced"
+                                              IsChecked="{Binding ShowAdvancedOptions}"
+                                              VerticalAlignment="Center"/>
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+
+                        <ScrollViewer Grid.Row="1" Padding="0,0,6,0">
+                            <StackPanel Spacing="12">
+                                <ItemsControl ItemsSource="{Binding FfmpegOptionGroups}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="vm:OptionCategoryGroupViewModel">
+                                            <Border Classes="panel"
+                                                    IsVisible="{Binding HasVisibleOptions}"
+                                                    Margin="0,0,0,10">
+                                                <StackPanel Spacing="8">
+                                                    <TextBlock Text="{Binding Category}"
+                                                               FontSize="15"
+                                                               FontWeight="SemiBold"/>
+                                                    <ItemsControl ItemsSource="{Binding Options}"
+                                                                  ItemTemplate="{StaticResource OptionCardTemplate}"/>
+                                                </StackPanel>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+
+                                <Border Classes="panel">
+                                    <Expander Header="All FFmpeg options (from -h long)" IsExpanded="False">
+                                        <StackPanel Spacing="8" Margin="0,8,0,0">
+                                            <TextBlock Text="{Binding FfmpegHelpSummary}" Classes="muted" FontSize="12"/>
+                                            <TextBox Text="{Binding FfmpegHelpSearch}"
+                                                     PlaceholderText="Search all FFmpeg flags and descriptions..."/>
+                                            <ListBox ItemsSource="{Binding FilteredFfmpegHelpOptions}"
+                                                     ItemTemplate="{StaticResource HelpOptionTemplate}"
+                                                     MaxHeight="280"/>
+                                        </StackPanel>
+                                    </Expander>
+                                </Border>
+
+                                <Border Classes="panel">
+                                    <StackPanel Spacing="6">
+                                        <TextBlock Text="Extra FFmpeg arguments (one argument per line)"
+                                                   FontWeight="SemiBold"/>
+                                        <TextBlock Text="Appended before the output path. Reserved switches (-i, -y, -n, -progress, -nostdin) cannot be overridden."
+                                                   Classes="muted"
+                                                   FontSize="12"
+                                                   TextWrapping="Wrap"/>
+                                        <TextBox Classes="mono"
+                                                 Text="{Binding FfmpegExtraArgumentsText}"
+                                                 PlaceholderText="Example:&#10;-ar&#10;48000"
+                                                 AcceptsReturn="True"
+                                                 TextWrapping="Wrap"
+                                                 MinHeight="90"
+                                                 VerticalContentAlignment="Top"/>
+                                    </StackPanel>
+                                </Border>
+                            </StackPanel>
+                        </ScrollViewer>
+                    </Grid>
+                </TabItem>
+
+                <!-- Settings & Tool Paths Tab -->
+                <TabItem Header="Settings &amp; Tools">
+                    <ScrollViewer Padding="0,8,4,0">
+                        <StackPanel Spacing="12">
+                            <Border Classes="panel">
+                                <StackPanel Spacing="10">
+                                    <TextBlock Text="Directories" FontSize="16" FontWeight="SemiBold"/>
+                                    <TextBlock Text="Temporary working directory (per-job subfolders are cleaned up automatically)"
+                                               Classes="muted" FontSize="12"/>
+                                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                        <TextBox Text="{Binding TemporaryDirectory}"/>
+                                        <Button Grid.Column="1" Content="Browse" Command="{Binding BrowseTempCommand}"/>
+                                    </Grid>
+                                </StackPanel>
+                            </Border>
+
+                            <Border Classes="panel">
+                                <StackPanel Spacing="10">
+                                    <Grid ColumnDefinitions="*,Auto">
+                                        <TextBlock Text="Executable Overrides (optional; blank uses PATH)"
+                                                   FontSize="16" FontWeight="SemiBold"/>
+                                        <Button Grid.Column="1"
+                                                Classes="subtle"
+                                                Content="Re-check Tools"
+                                                IsEnabled="{Binding !IsDiscoveringTools}"
+                                                Command="{Binding CheckDependenciesCommand}"/>
+                                    </Grid>
+
+                                    <TextBlock Text="yt-dlp executable" Classes="muted" FontSize="12"/>
+                                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                        <TextBox Text="{Binding YtDlpPath}" PlaceholderText="yt-dlp (from PATH)"/>
+                                        <Button Grid.Column="1" Content="Browse" Command="{Binding BrowseYtDlpCommand}"/>
+                                    </Grid>
+                                    <TextBlock Text="{Binding YtDlpStatusText}" Classes="muted" FontSize="12" TextWrapping="Wrap"/>
+
+                                    <TextBlock Text="FFmpeg executable" Classes="muted" FontSize="12"/>
+                                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                        <TextBox Text="{Binding FfmpegPath}" PlaceholderText="ffmpeg (from PATH)"/>
+                                        <Button Grid.Column="1" Content="Browse" Command="{Binding BrowseFfmpegCommand}"/>
+                                    </Grid>
+                                    <TextBlock Text="{Binding FfmpegStatusText}" Classes="muted" FontSize="12" TextWrapping="Wrap"/>
+
+                                    <TextBlock Text="ffprobe executable" Classes="muted" FontSize="12"/>
+                                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                        <TextBox Text="{Binding FfprobePath}" PlaceholderText="ffprobe (from PATH)"/>
+                                        <Button Grid.Column="1" Content="Browse" Command="{Binding BrowseFfprobeCommand}"/>
+                                    </Grid>
+                                    <TextBlock Text="{Binding FfprobeStatusText}" Classes="muted" FontSize="12" TextWrapping="Wrap"/>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </ScrollViewer>
+                </TabItem>
+            </TabControl>
+
+            <!-- Right: Always-Visible Command Preview + Activity/Progress -->
+            <Grid Grid.Column="1" RowDefinitions="Auto,*" RowSpacing="12">
+                <!-- Command Preview & Validation -->
+                <Border Classes="panel">
+                    <StackPanel Spacing="8">
+                        <TextBlock Text="Command Preview" FontSize="16" FontWeight="SemiBold"/>
+
+                        <ItemsControl ItemsSource="{Binding ValidationIssues}"
+                                      IsVisible="{Binding HasValidationIssues}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vm:ValidationIssueItemViewModel">
+                                    <Border Classes="card" Padding="6" Margin="0,0,0,4">
+                                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
+                                            <Border Classes="badge" Background="{Binding BadgeBackground}">
+                                                <TextBlock Text="{Binding SeverityText}"
+                                                           Foreground="{Binding BadgeForeground}"
+                                                           FontSize="10"
+                                                           FontWeight="Bold"/>
+                                            </Border>
+                                            <TextBlock Grid.Column="1"
+                                                       Text="{Binding Message}"
+                                                       FontSize="12"
+                                                       TextWrapping="Wrap"/>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <TextBlock Text="yt-dlp" Classes="muted" FontSize="11"/>
+                        <TextBox Classes="mono"
+                                 Text="{Binding YtDlpCommandPreview, Mode=OneWay}"
+                                 IsReadOnly="True"
+                                 TextWrapping="Wrap"
+                                 MaxHeight="90"/>
+
+                        <TextBlock Text="FFmpeg (per file)" Classes="muted" FontSize="11"/>
+                        <TextBox Classes="mono"
+                                 Text="{Binding FfmpegCommandPreview, Mode=OneWay}"
+                                 IsReadOnly="True"
+                                 TextWrapping="Wrap"
+                                 MaxHeight="90"/>
+                    </StackPanel>
+                </Border>
+
+                <!-- Activity, Per-File Progress & Report -->
+                <Border Grid.Row="1" Classes="panel">
+                    <Grid RowDefinitions="Auto,Auto,Auto,*" RowSpacing="8">
+                        <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="6">
+                            <TextBlock Text="Activity &amp; Process Report" FontSize="16" FontWeight="SemiBold"/>
+                            <Button Grid.Column="1" Classes="subtle" Content="Copy report"
+                                    Command="{Binding CopyReportCommand}"/>
+                            <Button Grid.Column="2" Classes="subtle" Content="Clear"
+                                    Command="{Binding ClearLogCommand}"/>
+                        </Grid>
+
+                        <ScrollViewer Grid.Row="1" MaxHeight="165">
+                            <ItemsControl ItemsSource="{Binding FileItems}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:FileProgressItemViewModel">
+                                        <Border Classes="card" Padding="8" Margin="0,0,0,6">
+                                            <StackPanel Spacing="4">
+                                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                                    <TextBlock Text="{Binding Title}"
+                                                               FontWeight="SemiBold"
+                                                               FontSize="12"
+                                                               TextTrimming="CharacterEllipsis"/>
+                                                    <TextBlock Grid.Column="1"
+                                                               Text="{Binding StatusText}"
+                                                               Classes="muted"
+                                                               FontSize="11"/>
+                                                </Grid>
+                                                <ProgressBar Minimum="0"
+                                                             Maximum="100"
+                                                             Value="{Binding ProgressPercent}"
+                                                             Height="5"/>
+                                            </StackPanel>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+
+                        <TextBox Grid.Row="2"
+                                 Classes="mono"
+                                 IsVisible="{Binding HasFinalReport}"
+                                 Text="{Binding FinalReportText, Mode=OneWay}"
+                                 IsReadOnly="True"
+                                 AcceptsReturn="True"
+                                 TextWrapping="Wrap"
+                                 MaxHeight="135"
+                                 VerticalContentAlignment="Top"/>
+
+                        <TextBox Grid.Row="3"
+                                 Classes="mono"
+                                 Text="{Binding LogText, Mode=OneWay}"
+                                 IsReadOnly="True"
+                                 AcceptsReturn="True"
+                                 TextWrapping="Wrap"
+                                 VerticalContentAlignment="Top"/>
+                    </Grid>
+                </Border>
+            </Grid>
         </Grid>
     </Grid>
 </Window>

@@ -1,138 +1,89 @@
-
 using Avalonia.Controls;
+using Avalonia.Input.Platform;
 using Avalonia.Platform.Storage;
-using FetchForge.Core.Models;
-using FetchForge.Core.Services;
+using FetchForge.Services;
+using FetchForge.ViewModels;
 
 namespace FetchForge;
 
-public partial class MainWindow : Window
+public partial class MainWindow : Window, IUiHostServices
 {
-    private readonly DependencyChecker _dependencies = new();
-    private readonly ProfileFileService _profiles = new();
+    private readonly MainWindowViewModel _viewModel;
 
     public MainWindow()
     {
         InitializeComponent();
-
-        OutputBox.Text = Path.Combine(
-            Environment.GetFolderPath(
-                Environment.SpecialFolder.UserProfile),
-            "Downloads");
-
-        FilterBox.Text = new AudioProfile().FilterChain;
-
-        Log("FetchForge initialized.");
-        Log("Download execution is not implemented yet.");
+        _viewModel = new MainWindowViewModel(this);
+        DataContext = _viewModel;
+        Opened += async (_, _) => await _viewModel.InitializeAsync();
     }
 
-    private async void BrowseOutput_Click(
-        object? sender,
-        Avalonia.Interactivity.RoutedEventArgs e)
+    public async Task<string?> PickFolderAsync(
+        string title,
+        string? initialPath = null)
     {
+        IStorageFolder? suggestedStartLocation = null;
+        if (!string.IsNullOrWhiteSpace(initialPath) && Directory.Exists(initialPath))
+        {
+            suggestedStartLocation = await StorageProvider.TryGetFolderFromPathAsync(
+                new Uri(Path.GetFullPath(initialPath)));
+        }
+
         var folders = await StorageProvider.OpenFolderPickerAsync(
             new FolderPickerOpenOptions
             {
-                Title = "Select output directory",
-                AllowMultiple = false
+                Title = title,
+                AllowMultiple = false,
+                SuggestedStartLocation = suggestedStartLocation
             });
 
-        if (folders.Count > 0)
-            OutputBox.Text = folders[0].Path.LocalPath;
+        return folders.Count > 0 ? folders[0].Path.LocalPath : null;
     }
 
-    private async void CheckTools_Click(
-        object? sender,
-        Avalonia.Interactivity.RoutedEventArgs e)
-    {
-        Log(await _dependencies.CheckAsync());
-    }
-
-    private async void ImportProfile_Click(
-        object? sender,
-        Avalonia.Interactivity.RoutedEventArgs e)
+    public async Task<string?> PickOpenFileAsync(
+        string title,
+        string filterName,
+        IReadOnlyList<string> patterns)
     {
         var files = await StorageProvider.OpenFilePickerAsync(
             new FilePickerOpenOptions
             {
-                Title = "Import audio profile",
+                Title = title,
                 AllowMultiple = false,
-                FileTypeFilter = new[]
-                {
-                    new FilePickerFileType("JSON profile")
-                    {
-                        Patterns = new[] { "*.json" }
-                    }
-                }
+                FileTypeFilter =
+                [
+                    new FilePickerFileType(filterName) { Patterns = patterns }
+                ]
             });
 
-        if (files.Count == 0)
-            return;
-
-        try
-        {
-            var profile = await _profiles.LoadAsync(
-                files[0].Path.LocalPath);
-
-            FilterBox.Text = profile.FilterChain;
-            EnhanceCheck.IsChecked = profile.Enabled;
-
-            Log($"Imported profile: {profile.Name}");
-        }
-        catch (Exception ex)
-        {
-            Log($"Profile import failed: {ex.Message}");
-        }
+        return files.Count > 0 ? files[0].Path.LocalPath : null;
     }
 
-    private async void ExportProfile_Click(
-        object? sender,
-        Avalonia.Interactivity.RoutedEventArgs e)
+    public async Task<string?> PickSaveFileAsync(
+        string title,
+        string suggestedFileName,
+        string defaultExtension,
+        string filterName,
+        IReadOnlyList<string> patterns)
     {
         var file = await StorageProvider.SaveFilePickerAsync(
             new FilePickerSaveOptions
             {
-                Title = "Export audio profile",
-                SuggestedFileName = "FetchForge-AudioProfile.json",
-                DefaultExtension = "json",
-                FileTypeChoices = new[]
-                {
-                    new FilePickerFileType("JSON profile")
-                    {
-                        Patterns = new[] { "*.json" }
-                    }
-                }
+                Title = title,
+                SuggestedFileName = suggestedFileName,
+                DefaultExtension = defaultExtension,
+                FileTypeChoices =
+                [
+                    new FilePickerFileType(filterName) { Patterns = patterns }
+                ]
             });
 
-        if (file is null)
-            return;
-
-        try
-        {
-            var profile = new AudioProfile
-            {
-                Name = "Custom",
-                Enabled = EnhanceCheck.IsChecked ?? false,
-                FilterChain = FilterBox.Text ?? string.Empty
-            };
-
-            await _profiles.SaveAsync(
-                file.Path.LocalPath, profile);
-
-            Log($"Exported profile: {file.Path.LocalPath}");
-        }
-        catch (Exception ex)
-        {
-            Log($"Profile export failed: {ex.Message}");
-        }
+        return file?.Path.LocalPath;
     }
 
-    private void Log(string message)
+    public async Task CopyTextAsync(string text)
     {
-        var line = $"[{DateTime.Now:HH:mm:ss}] {message}";
-
-        LogBox.Text = string.IsNullOrWhiteSpace(LogBox.Text)
-            ? line
-            : $"{LogBox.Text}{Environment.NewLine}{line}";
+        if (Clipboard is not null)
+            await Clipboard.SetTextAsync(text);
     }
 }
