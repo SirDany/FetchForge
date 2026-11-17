@@ -361,7 +361,7 @@
                                 </ItemsControl>
 
                                 <Border Classes="panel">
-                                    <Expander Header="All FFmpeg options (from -h long)" IsExpanded="False">
+                                    <Expander Header="All FFmpeg options (from -h full)" IsExpanded="False">
                                         <StackPanel Spacing="8" Margin="0,8,0,0">
                                             <TextBlock Text="{Binding FfmpegHelpSummary}" Classes="muted" FontSize="12"/>
                                             <TextBox Text="{Binding FfmpegHelpSearch}"

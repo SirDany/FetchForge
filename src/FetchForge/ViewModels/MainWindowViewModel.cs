@@ -567,7 +567,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
             var ffCap = report.Capabilities.FirstOrDefault(c => c.ToolName == ToolNames.Ffmpeg);
             _allFfmpegHelp = ffCap?.HelpOptions ?? Array.Empty<HelpOptionInfo>();
             FfmpegHelpSummary = ffCap is { Found: true, HelpAvailable: true }
-                ? $"{_allFfmpegHelp.Count} options parsed from ffmpeg -h long ({ffCap.Encoders.Count} encoders)"
+                ? $"{_allFfmpegHelp.Count} options parsed from ffmpeg -h full ({ffCap.Encoders.Count} encoders)"
                 : ffCap?.Message ?? "FFmpeg not available.";
             RefreshFfmpegHelpFilter();
 

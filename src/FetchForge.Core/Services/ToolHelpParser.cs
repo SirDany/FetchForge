@@ -26,6 +26,11 @@ public static partial class ToolHelpParser
         @"(?: <(?<ph>[^>]*)>)?(?: {2,}(?<desc>\S.*))?\s*$")]
     private static partial Regex FfmpegOptionPattern();
 
+    // "  -threads           <int>        ED.VA...... set the number of threads..."
+    [GeneratedRegex(
+        @"^  (?<sw>-[^\s]+)\s+<(?<ph>[^>]*)>\s+[A-Z.]{11}\s+(?<desc>.*)$")]
+    private static partial Regex FfmpegAvOptionPattern();
+
     // " A....D aac                  AAC (Advanced Audio Coding)"
     [GeneratedRegex(
         @"^ (?<type>[VASD])[.A-Z]{5} (?<name>\S+)\s+(?<desc>.*)$")]
@@ -153,6 +158,7 @@ public static partial class ToolHelpParser
         var results = new Dictionary<string, HelpOptionInfo>(
             StringComparer.Ordinal);
         var section = "General";
+        var inAvCodecContext = false;
 
         foreach (var rawLine in SplitLines(help))
         {
@@ -161,15 +167,44 @@ public static partial class ToolHelpParser
             if (line.Length == 0)
                 continue;
 
-            if (!line.StartsWith('-'))
+            if (!char.IsWhiteSpace(line[0]) && line.EndsWith(':'))
             {
-                // Section headings end with ':' (or "...):") and are
-                // never indented in "-h long" output.
-                if (!char.IsWhiteSpace(line[0]) && line.EndsWith(':'))
-                    section = line.TrimEnd(':').Trim();
+                if (string.Equals(line, "AVCodecContext AVOptions:", StringComparison.Ordinal))
+                {
+                    inAvCodecContext = true;
+                    section = "AVCodecContext AVOptions";
+                    continue;
+                }
 
+                if (inAvCodecContext)
+                {
+                    // Stop once per-codec / per-muxer AVOptions begin in "-h full".
+                    break;
+                }
+
+                section = line.TrimEnd(':').Trim();
                 continue;
             }
+
+            if (inAvCodecContext)
+            {
+                var avMatch = FfmpegAvOptionPattern().Match(line);
+                if (!avMatch.Success)
+                    continue;
+
+                var avName = avMatch.Groups["sw"].Value;
+                results.TryAdd(avName, new HelpOptionInfo(
+                    ToolNames.Ffmpeg,
+                    avName,
+                    Array.Empty<string>(),
+                    avMatch.Groups["ph"].Value,
+                    avMatch.Groups["desc"].Value.Trim(),
+                    section));
+                continue;
+            }
+
+            if (!line.StartsWith('-'))
+                continue;
 
             var match = FfmpegOptionPattern().Match(line);
             if (!match.Success)

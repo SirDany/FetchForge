@@ -3,4 +3,7 @@
     <Project Path="src/FetchForge.Core/FetchForge.Core.csproj" />
     <Project Path="src/FetchForge/FetchForge.csproj" />
   </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/FetchForge.Core.Tests/FetchForge.Core.Tests.csproj" />
+  </Folder>
 </Solution>

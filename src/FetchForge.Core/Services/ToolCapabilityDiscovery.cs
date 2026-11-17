@@ -65,7 +65,7 @@ public sealed class ToolCapabilityDiscovery
             ToolNames.Ffmpeg,
             executable,
             ["-hide_banner", "-version"],
-            ["-hide_banner", "-h", "long"],
+            ["-hide_banner", "-h", "full"],
             ToolHelpParser.ParseFfmpegHelp,
             cancellationToken);
 

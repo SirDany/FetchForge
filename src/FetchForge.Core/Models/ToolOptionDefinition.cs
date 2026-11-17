@@ -113,7 +113,7 @@ public sealed record ToolOptionDefinition
             {
                 return EffectiveTrueArguments
                     .Concat(EffectiveFalseArguments)
-                    .Where(argument => argument.StartsWith('-'))
+                    .Where(IsSwitchToken)
                     .Distinct(StringComparer.Ordinal);
             }
 
@@ -122,6 +122,11 @@ public sealed record ToolOptionDefinition
                 : [CommandLineArgument];
         }
     }
+
+    private static bool IsSwitchToken(string token) =>
+        token.Length > 1 &&
+        token[0] == '-' &&
+        (token[1] == '-' || char.IsLetter(token[1]));
 
     /// <summary>
     /// Validates the metadata definition itself.
