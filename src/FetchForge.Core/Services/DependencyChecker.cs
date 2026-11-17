@@ -1,70 +1,64 @@
-
-using System.Diagnostics;
+﻿using FetchForge.Core.Models;
 
 namespace FetchForge.Core.Services;
 
 public sealed class DependencyChecker
 {
+    private readonly ToolCapabilityDiscovery _discovery;
+    private readonly ToolOptionRegistry _registry;
+
+    public DependencyChecker()
+        : this(new ToolCapabilityDiscovery(), new ToolOptionRegistry())
+    {
+    }
+
+    public DependencyChecker(
+        ToolCapabilityDiscovery discovery,
+        ToolOptionRegistry registry)
+    {
+        _discovery = discovery
+            ?? throw new ArgumentNullException(nameof(discovery));
+        _registry = registry
+            ?? throw new ArgumentNullException(nameof(registry));
+    }
+
     public async Task<string> CheckAsync(
         CancellationToken cancellationToken = default)
     {
-        var ytDlp = await CheckExecutableAsync(
-            "yt-dlp", "--version", cancellationToken);
+        var results = await _discovery.DiscoverAllAsync(cancellationToken);
+        var matcher = new ToolOptionCapabilityMatcher(_registry);
+        var matches = matcher.Match(results);
 
-        var ffmpeg = await CheckExecutableAsync(
-            "ffmpeg", "-version", cancellationToken);
+        var lines = new List<string>();
 
-        return string.Join(
-            Environment.NewLine,
-            ytDlp,
-            ffmpeg);
+        lines.AddRange(results.Select(FormatResult));
+        lines.Add("");
+        lines.Add("Configured option support:");
+
+        foreach (var match in matches.OrderBy(m => m.Definition.Tool)
+                                     .ThenBy(m => m.Definition.Id))
+        {
+            lines.Add(
+                $"[{match.Status}] {match.Definition.Id}: {match.Message}");
+        }
+
+        return string.Join(Environment.NewLine, lines);
     }
 
-    private static async Task<string> CheckExecutableAsync(
-        string executable,
-        string argument,
-        CancellationToken cancellationToken)
+    private static string FormatResult(ToolCapabilityResult result)
     {
-        try
-        {
-            using var process = new Process();
+        var status = result.Found ? "FOUND" : "NOT AVAILABLE";
+        var version = string.IsNullOrWhiteSpace(result.Version)
+            ? string.Empty
+            : $" ({result.Version})";
+        var path = string.IsNullOrWhiteSpace(result.ExecutablePath)
+            ? string.Empty
+            : $" [{result.ExecutablePath}]";
+        var options = result.Found
+            ? $" Discovered {result.SupportedOptions.Count} option names."
+            : string.Empty;
 
-            process.StartInfo = new ProcessStartInfo
-            {
-                FileName = executable,
-                UseShellExecute = false,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                CreateNoWindow = true
-            };
-
-            process.StartInfo.ArgumentList.Add(argument);
-
-            process.Start();
-
-            var stdout = process.StandardOutput.ReadToEndAsync(
-                cancellationToken);
-
-            var stderr = process.StandardError.ReadToEndAsync(
-                cancellationToken);
-
-            await process.WaitForExitAsync(cancellationToken);
-
-            var output = (await stdout + " " + await stderr).Trim();
-            var firstLine = output.Split(
-                new[] { '\r', '\n' },
-                StringSplitOptions.RemoveEmptyEntries)
-                .FirstOrDefault() ?? "No version information returned.";
-
-            return $"{executable}: " +
-                (process.ExitCode == 0 ? "FOUND" : "ERROR") +
-                $" — {firstLine}";
-        }
-        catch (Exception ex) when (
-            ex is System.ComponentModel.Win32Exception
-            or FileNotFoundException)
-        {
-            return $"{executable}: NOT FOUND on PATH";
-        }
+        return $"{result.ToolName}: {status}{version}{path} — " +
+               $"{result.Message}{options}";
     }
 }
